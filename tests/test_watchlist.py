@@ -44,11 +44,11 @@ def test_add_to_watchlist_nonexistent_film_raises(app, sample_user):
     FilmNotFoundError, not a database integrity error.
 
     Equivalent to test_add_to_collection_nonexistent_film_raises in
-    tests/test_collection.py. On the feature/watchlist branch Film.id is still
-    an integer (pre-UUID refactor), so a nonexistent integer id is used here.
+    tests/test_collection.py. Film IDs are UUIDs post-refactor, so a
+    nonexistent UUID is used here (matching the collection test).
     """
     with app.app_context():
-        nonexistent_film_id = 999999
+        nonexistent_film_id = "00000000-0000-0000-0000-000000000000"
 
         with pytest.raises(FilmNotFoundError):
             add_to_watchlist(user_id=sample_user, film_id=nonexistent_film_id)
