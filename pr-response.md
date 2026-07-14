@@ -85,8 +85,25 @@
 
 ## Comment 6 — Rebase
 **What conflicted:**
+- The refactor on `main` (`refactor: migrate film IDs from integer to UUID`) rewrote `models.py`: `Film.id` and `CollectionEntry.film_id` changed from `db.Integer` to `db.String(36)` (UUID), and that same commit removed the `WatchlistEntry` model.
+- Because of how this repo is structured, the rebase itself produced **no textual merge conflict**: the `WatchlistEntry` model and integer `film_id` lived in the shared base commit, and no watchlist commit re-touched `models.py`, so `feature/watchlist` and `main` modified disjoint files. `git rebase origin/main` therefore replayed all commits cleanly.
+- The real (semantic) conflict surfaced *after* the clean rebase: the rebased `models.py` was `main`'s UUID version with **no `WatchlistEntry`**, so `services/watchlist_service.py` and `tests/test_watchlist.py` (which `import WatchlistEntry`) failed with `ImportError` and the suite could not even collect.
+
 **How I resolved it:**
+- Rebased `feature/watchlist` onto the updated `origin/main` with `git rebase origin/main` (no `-i`, no merge commit).
+- Repaired the branch to follow the UUID film-ID pattern used by the refactored collection code:
+  - `models.py`: re-added the `WatchlistEntry` model with `film_id = db.Column(db.String(36), db.ForeignKey("film.id"), ...)` — a UUID, matching `CollectionEntry`. Integer film IDs were **not** reintroduced.
+  - `services/watchlist_service.py`: updated the `add_to_watchlist` docstring from `film_id (int)` to `film_id (str): UUID` (the logic is ID-type-agnostic).
+  - `tests/test_watchlist.py`: changed the nonexistent film ID from the integer `999999` to the UUID string `"00000000-0000-0000-0000-000000000000"`, matching `test_add_to_collection_nonexistent_film_raises`.
+- The untracked local `.gitignore` (a subset of main's) was removed before rebasing so it would not block the checkout; `origin/main` provides the tracked `.gitignore`.
+
 **How I verified no conflict remains:**
+- Rebase completed successfully (`Successfully rebased and updated refs/heads/feature/watchlist`).
+- `git status` is clean (nothing to commit, working tree clean).
+- `git log --merges origin/main..HEAD` returns nothing → no merge commits; history is linear on top of `origin/main`.
+- `python -m pytest tests/ -v` → **5 passed** (previously the suite errored on import until the model was re-added).
+- Watchlist code and tests now use UUID-compatible film IDs consistent with the collection code.
+- Known pre-existing issue (out of scope, not introduced by the rebase): `get_watchlist()` reads `entry.film`, but neither the original nor the restored `WatchlistEntry` defines a `film` relationship/backref, so that path is untested and would fail at runtime. Flagged for a follow-up; not changed here to keep the rebase scope tight.
 
 ## PR Description
 <!-- Written at the end — feature overview, design decisions, manual testing steps -->
