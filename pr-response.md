@@ -46,13 +46,42 @@
 
 ## Comment 4 — Default visibility
 **My position:**
+- Keep watchlist entries **public by default** for this project. This already matches the code: `WatchlistEntry.public` is defined in `models.py` as `db.Column(db.Boolean, default=True)`, so no code change is required for this decision.
+
 **Reasoning:**
+- CineLog is a social film-tracking app.
+- Public watchlists support discovery, recommendations, and friend-to-friend browsing.
+- A watchlist is less sensitive than private ratings or personal notes because it only signals *future* viewing interest, not a judgment or a completed activity.
+- Keeping the default public is consistent with the social nature of the app and avoids hiding the feature's core social value behind an opt-in.
+
 **Tradeoff acknowledged:**
+- Some users may treat their watchlist as private taste data, and watch *intent* can be identity-revealing (signalling interests a user has not chosen to disclose).
+- Because defaults are sticky — most users never change them — "public by default" effectively makes the majority of watchlists public regardless of individual preference. This is the strongest form of the privacy objection and is the main reason a production build should not rely on the default alone.
+- Private-by-default would better protect users who do not expect their watch intentions to be visible.
+- A production version should make visibility explicit in the UI or add a per-entry visibility toggle rather than relying only on a default — the `public` column already exists to support that, so the model does not lock us into either policy.
 
 ## Comment 5 — Sort order
 **My position:**
+- Accept the reviewer's preference and sort watchlists by **date added, newest first**.
+
 **Reasoning:**
+- A watchlist functions like a queue or reminder list.
+- The most recently added films are usually the most relevant to the user's current intent.
+- Alphabetical order is useful for lookup, but less useful for answering "what did I recently decide I want to watch?"
+- Date-added order better matches user behavior for a watchlist, and it makes the watchlist consistent with `get_collection()`, which already sorts by `date_added` descending.
+
 **Engagement with reviewer's point:**
+- The reviewer's point is persuasive because watchlists are time-sensitive.
+- I originally used alphabetical order because it is predictable and stable.
+- I changed the implementation to date-added order because it better reflects how users interact with a watchlist.
+
+**Code changed:**
+- `services/watchlist_service.py`, `get_watchlist()`: replaced `.join(Film).order_by(Film.title.asc())` with `.order_by(WatchlistEntry.date_added.desc())`. The real timestamp field on the model is `WatchlistEntry.date_added` (a `DateTime` column). The `.join(Film)` was only needed to sort on `Film.title`, so it was removed; `entry.film` is still available via the relationship for building each result dict. This now mirrors `get_collection()` exactly.
+
+**How tests verified the behavior:**
+- `python -m pytest tests/test_watchlist.py -v` → **1 passed**
+- `python -m pytest tests/ -v` → **5 passed** (no regressions).
+- Honesty note: there is currently **no dedicated watchlist sort-order test** (the equivalent of `test_get_collection_returns_newest_first`). The suite confirms the change did not break anything, and the new ordering reuses the same `date_added.desc()` pattern that *is* directly tested for the collection. A dedicated `test_get_watchlist_returns_newest_first` would be a good follow-up but was out of scope for this milestone.
 
 ## Comment 6 — Rebase
 **What conflicted:**
